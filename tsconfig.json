@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "noImplicitAny": true,
+        "esModuleInterop": true,
+        "target": "ES5"
+    },
+    "include": [
+        "src/**/*"
+    ],
+    "ts-node": {
+        "files": true
+    },
+    "files": [
+        "src/index.ts",
+        "src/eiscp.d.ts"
+    ]
+}

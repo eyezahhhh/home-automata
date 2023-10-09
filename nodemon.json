@@ -1,0 +1,6 @@
+{
+    "ignore": ["node_modules"],
+    "watch": ["src", ".env", "nodemon.json"],
+    "ext": "ts",
+    "exec": "npx ts-node src/index.ts"
+}
