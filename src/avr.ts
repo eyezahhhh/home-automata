@@ -230,7 +230,7 @@ export function subscribe(address: string, callback: (data: SubscriptionPacket) 
 
             timeout = setTimeout(() => {
                 if (callback) {
-                    if (chunk.data.trackRoles.mediaData.metaData) {
+                    if (chunk.data.trackRoles?.mediaData?.metaData) {
                         cache.media = {
                             source: chunk.data.mediaRoles.title,
                             title: chunk.data.trackRoles.title,
