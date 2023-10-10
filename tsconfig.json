@@ -2,7 +2,8 @@
     "compilerOptions": {
         "noImplicitAny": true,
         "esModuleInterop": true,
-        "target": "ES5"
+        "target": "ESNext",
+        "module": "NodeNext"
     },
     "include": [
         "src/**/*"
