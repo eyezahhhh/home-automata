@@ -1,6 +1,35 @@
 import Eiscp, { CommandInfo } from "eiscp";
 import ChildProcess from "child_process";
 
+export type Cache = {
+    on: boolean
+    input: Input
+    listeningMode: ListeningMode
+    dimmerLevel: DimmerLevel
+    volume: number,
+    media: null | {
+        source: string | null
+        title: string
+        artist: string | null
+        image: string | null
+        timestamp: number | null
+        duration: number | null
+    }
+}
+
+const cache: Cache = {
+    on: null,
+    input: null,
+    listeningMode: null,
+    dimmerLevel: null,
+    volume: null,
+    media: null
+}
+
+export function getCache() {
+    return cache;
+}
+
 const listeners = new Map<string, ((response: any) => void)[]>();
 
 function tempListener(event: string, callback: (response: any) => void) {
@@ -100,7 +129,7 @@ export function getCommand(command: string) {
 
 export type SubscriptionPacket = {
     data: {
-        status: {
+        status?: {
             duration: number,
             playSpeed: number
         },
@@ -108,7 +137,7 @@ export type SubscriptionPacket = {
             previous: boolean,
             next_: boolean,
             pause: boolean,
-            playMode: {} // todo: figure out what this is for
+            playMode?: {} // todo: figure out what this is for
         },
         mediaRoles: {
             mediaData?: {
@@ -116,6 +145,10 @@ export type SubscriptionPacket = {
                 live: boolean,
                 serviceID: string
             }
+            resources?: {
+                mimeType: string,
+                uri: string
+            }[]
             title: string,
             asciiTitle?: string,
             description?: string,
@@ -131,19 +164,27 @@ export type SubscriptionPacket = {
         state: "playing" | "paused", // todo: figure out what else this can be
         trackRoles: {
             mediaData: {
-                composer: string,
-                serviceNameOverride: string,
-                externalAppName: string,
+                composer?: string,
+                serviceNameOverride?: string,
+                externalAppName?: string,
                 artist: string,
                 album: string,
-                albumArtist: string,
-                originalTrackNumber: number,
-                serviceID: string
+                albumArtist?: string,
+                originalTrackNumber?: number,
+                serviceID?: string
+                resources?: {
+                    duration: number
+                }[],
+                metaData?: {
+                    artist: string,
+                    album: string,
+                    genre: string
+                }
             },
             title: string,
-            description: string,
-            icon: string,
-            audioType: string
+            description?: string,
+            icon?: string,
+            audioType?: string
         }
     };
     playTime: {
@@ -189,6 +230,20 @@ export function subscribe(address: string, callback: (data: SubscriptionPacket) 
 
             timeout = setTimeout(() => {
                 if (callback) {
+                    if (chunk.data.trackRoles.mediaData.metaData) {
+                        cache.media = {
+                            source: chunk.data.mediaRoles.title,
+                            title: chunk.data.trackRoles.title,
+                            artist: chunk.data.trackRoles.mediaData.metaData.artist || null,
+                            image: chunk.data.trackRoles.icon || null,
+                            timestamp: chunk.data.mediaRoles.timestamp || null,
+                            duration: chunk.data.status?.duration
+                        }
+                    } else {
+                        cache.media = null;
+                    }
+                    
+
                     callback(chunk);
                 }
             }, 50);
@@ -235,13 +290,41 @@ export function subscribe(address: string, callback: (data: SubscriptionPacket) 
     });
 }
 
-export function setPower(on: boolean) {
-    return new Promise<void>((resolve, reject) => {
-        Eiscp.command(`system-power ${on ? "on" : "standby"}`, e => {
-            if (e) {
+export function getPower() {
+    return new Promise<boolean>((resolve, reject) => {
+        let active = true;
+        tempListener("system-power", (state: string) => {
+            if (active) {
+                cache.on = state == "on";
+                resolve(state == "on");
+                active = false;
+            }
+        });
+
+        Eiscp.command("system-power query", e => {
+            if (e && active) {
+                active = false;
                 reject();
-            } else {
-                resolve();
+            }
+        });
+    });
+}
+
+export function setPower(on: boolean) {
+    return new Promise<boolean>((resolve, reject) => {
+        let active = true;
+        tempListener("system-power", (state: string) => {
+            if (active) {
+                cache.on = state == "on";
+                resolve(state == "on");
+                active = false;
+            }
+        });
+
+        Eiscp.command(`system-power ${on ? "on" : "standby"}`, e => {
+            if (e && active) {
+                active = false;
+                reject();
             }
         });
     });
@@ -250,14 +333,15 @@ export function setPower(on: boolean) {
 export function getVolume() {
     return new Promise<number>((resolve, reject) => {
         let active = true;
-        tempListener("volume", (volume: number) => {
+        tempListener("master-volume", (volume: number) => {
             if (active) {
+                cache.volume = volume;
                 resolve(volume);
                 active = false;
             }
         });
 
-        Eiscp.command("volume query", e => {
+        Eiscp.command("master-volume query", e => {
             if (e && active) {
                 active = false;
                 reject();
@@ -269,14 +353,15 @@ export function getVolume() {
 export function setVolume(volume: number) {
     return new Promise<number>((resolve, reject) => {
         let active = true;
-        tempListener("volume", (volume: number) => {
+        tempListener("master-volume", (volume: number) => {
             if (active) {
+                cache.volume = volume;
                 resolve(volume);
                 active = false;
             }
         });
 
-        Eiscp.command(`volume ${Math.min(Math.max(volume, 0), 100)}`, e => {
+        Eiscp.command(`master-volume ${Math.min(Math.max(volume, 0), 200)}`, e => {
             if (e && active) {
                 active = false;
                 reject();
@@ -288,14 +373,14 @@ export function setVolume(volume: number) {
 export function changeVolume(direction: "up" | "down") {
     return new Promise<number>((resolve, reject) => {
         let active = true;
-        tempListener("volume", (volume: number) => {
+        tempListener("master-volume", (volume: number) => {
             if (active) {
                 resolve(volume);
                 active = false;
             }
         });
 
-        Eiscp.command(`volume level-${direction}`, e => {
+        Eiscp.command(`master-volume level-${direction}`, e => {
             if (e && active) {
                 active = false;
                 reject();
@@ -368,6 +453,7 @@ export function getDimmerLevel() { // Gets the brightness of the LCD display and
         let active = true;
         tempListener("dimmer-level", (level: DimmerLevel) => {
             if (active) {
+                cache.dimmerLevel = level;
                 resolve(level);
                 active = false;
             }
@@ -387,6 +473,7 @@ export function setDimmerLevel(level: DimmerLevel) { // Changes the brightness o
         let active = true;
         tempListener("dimmer-level", (level: DimmerLevel) => {
             if (active) {
+                cache.dimmerLevel = level;
                 resolve(level);
                 active = false;
             }
@@ -449,11 +536,13 @@ export function getCurrentInput() {
                 if (Array.isArray(input)) {
                     for (let option of input) {
                         if (map[option]) {
+                            cache.input = map[option];
                             return resolve(map[option]);
                         }
                     }
                 }
                 if (typeof input == "string" && map[input]) {
+                    cache.input = map[input];
                     return resolve(map[input]);
                 }
                 if (Array.isArray(input)) {
@@ -484,11 +573,13 @@ export function setInput(input: Input | "next" | "previous") {
                 if (Array.isArray(input)) {
                     for (let option of input) {
                         if (map[option]) {
+                            cache.input = map[option];
                             return resolve(map[option]);
                         }
                     }
                 }
                 if (typeof input == "string" && map[input]) {
+                    cache.input = map[input];
                     return resolve(map[input]);
                 }
                 if (Array.isArray(input)) {
@@ -536,11 +627,13 @@ export function getListeningMode() {
                 if (Array.isArray(mode)) {
                     for (let option of mode) {
                         if (LISTENING_MODES.includes(option)) {
+                            cache.listeningMode = option;
                             return resolve(option);
                         }
                     }
                 }
                 if (typeof mode == "string" && LISTENING_MODES.includes(mode)) {
+                    cache.listeningMode = mode;
                     return resolve(mode);
                 }
                 if (Array.isArray(mode)) {
@@ -568,11 +661,13 @@ export function setListeningMode(mode: ListeningMode | "next" | "previous") {
                 if (Array.isArray(mode)) {
                     for (let option of mode) {
                         if (LISTENING_MODES.includes(option)) {
+                            cache.listeningMode = option;
                             return resolve(option);
                         }
                     }
                 }
                 if (typeof mode == "string" && LISTENING_MODES.includes(mode)) {
+                    cache.listeningMode = mode;
                     return resolve(mode);
                 }
                 if (Array.isArray(mode)) {
