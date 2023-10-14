@@ -3,7 +3,8 @@
         "noImplicitAny": true,
         "esModuleInterop": true,
         "target": "ESNext",
-        "module": "NodeNext"
+        "module": "NodeNext",
+        "strictNullChecks": true
     },
     "include": [
         "src/**/*"

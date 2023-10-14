@@ -21,7 +21,7 @@ app.get("/", (req, res) => {
     res.send("hello, world!");
 });
 
-const port = parseInt(process.env.REST_PORT) || 8080;
+const port = parseInt(process.env.REST_PORT!) || 8080;
 app.listen(port, () => {
     console.log(`Started server on port ${port}`);
 });

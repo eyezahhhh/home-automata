@@ -6,7 +6,7 @@ export default async function(app: Express) {
     let latestPacket: null | AVR.SubscriptionPacket = null;
 
     Eiscp.on("connect", async () => {
-        AVR.subscribe(process.env.AVR_ADDRESS, data => {
+        AVR.subscribe(process.env.AVR_ADDRESS!, data => {
             latestPacket = data;
         });
 
@@ -17,15 +17,16 @@ export default async function(app: Express) {
             AVR.getDimmerLevel,
             AVR.getListeningMode
         ];
-        try {
-            while (1) {
-                for (let i = 0; i < 4; i++) {
+        while (1) {
+            console.log("Looping");
+            for (let i = 0; i < 4; i++) {
+                try {
                     await callbacks[i]();
                     await new Promise(r => setTimeout(r, 10));
+                } catch (e) {
+                    await new Promise(r => setTimeout(r, 1000));
                 }
             }
-        } catch (e) {
-            console.error(e);
         }
     });
 
@@ -60,7 +61,7 @@ export default async function(app: Express) {
 
     app.get("/avr/input/:input", async (req, res) => {
         const input = req.params.input as AVR.Input;
-        const options: AVR.Input[] = ["hdmi-1", "hdmi-2", "hdmi-3", "hdmi-4", "hdmi-5", "hdmi-6", "hdmi-7", "am", "fm", "bluetooth", "network", "phono", "usb"];
+        const options: AVR.Input[] = ["hdmi-1", "hdmi-2", "hdmi-3", "hdmi-4", "hdmi-5", "hdmi-6", "hdmi-7", "am", "fm", "bluetooth", "network", "phono", "usb", "pc"];
 
         if (!options.includes(input)) {
             return res.status(400).send("Invalid input");

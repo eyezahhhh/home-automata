@@ -2,11 +2,11 @@ import Eiscp, { CommandInfo } from "eiscp";
 import ChildProcess from "child_process";
 
 export type Cache = {
-    on: boolean
-    input: Input
-    listeningMode: ListeningMode
-    dimmerLevel: DimmerLevel
-    volume: number,
+    on: boolean | null
+    input: Input | null
+    listeningMode: ListeningMode | null
+    dimmerLevel: DimmerLevel | null
+    volume: number | null,
     media: null | {
         source: string | null
         title: string
@@ -198,6 +198,8 @@ export type SubscriptionPacket = {
 
 export function subscribe(address: string, callback: (data: SubscriptionPacket) => void) {
     return new Promise<() => void>(async (resolve, reject) => {        
+        let usedCallback: null | ((data: SubscriptionPacket) => void) = callback;
+
         const child = ChildProcess.spawn("curl", ["-N", "--http0.9", `http://${address}:4545`], {
             stdio: ["pipe", "pipe", "pipe"]
         });
@@ -216,7 +218,7 @@ export function subscribe(address: string, callback: (data: SubscriptionPacket) 
 
         function kill() {
             child.kill();
-            callback = null;
+            usedCallback = null;
         }
 
         let waiting = true;
@@ -229,7 +231,7 @@ export function subscribe(address: string, callback: (data: SubscriptionPacket) 
             }
 
             timeout = setTimeout(() => {
-                if (callback) {
+                if (usedCallback) {
                     if (chunk.data.trackRoles?.mediaData?.metaData) {
                         cache.media = {
                             source: chunk.data.mediaRoles.title,
@@ -237,14 +239,14 @@ export function subscribe(address: string, callback: (data: SubscriptionPacket) 
                             artist: chunk.data.trackRoles.mediaData.metaData.artist || null,
                             image: chunk.data.trackRoles.icon || null,
                             timestamp: chunk.data.mediaRoles.timestamp || null,
-                            duration: chunk.data.status?.duration
+                            duration: chunk.data.status?.duration || null
                         }
                     } else {
                         cache.media = null;
                     }
                     
 
-                    callback(chunk);
+                    usedCallback(chunk);
                 }
             }, 50);
         }
@@ -498,6 +500,7 @@ export type Input = (
     "hdmi-5" |
     "hdmi-6" |
     "hdmi-7" |
+    "pc" |
     "phono" |
     "am" |
     "fm" |
@@ -514,6 +517,7 @@ const idMap: Record<Input | "next" | "previous", string> = {
     "hdmi-5": "hdmi-5",
     "hdmi-6": "hdmi-6",
     "hdmi-7": "video4",
+    "pc": "tv",
     "phono": "phono",
     "am": "am",
     "fm": "fm",
